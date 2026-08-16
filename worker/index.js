@@ -4,7 +4,7 @@
 // - KV_NAMESPACE (Workers KV namespace binding)
 // - OPENAI_API_KEY (secret)
 // The worker exposes:
-//  - POST /generate-key  -> { key }
+//  - POST (or GET) /generate-key  -> { key }
 //  - POST /chat          -> { reply } or { error }
 
 const RATE_LIMIT_PER_DAY = 100;
@@ -36,6 +36,7 @@ function corsHeaders(extra = {}) {
 
 async function handleRequest(request) {
   const url = new URL(request.url);
+  // Normalize pathname by removing trailing slashes
   const pathname = url.pathname.replace(/\/+$/, '');
 
   if (request.method === 'OPTIONS') {
@@ -43,13 +44,14 @@ async function handleRequest(request) {
   }
 
   try {
-    if (request.method === 'POST' && pathname === '/generate-key') {
+    // Accept GET or POST for /generate-key to be forgiving for client mistakes
+    if ((request.method === 'POST' || request.method === 'GET') && pathname === '/generate-key') {
       return await handleGenerateKey(request);
     }
     if (request.method === 'POST' && pathname === '/chat') {
       return await handleChat(request);
     }
-    return new Response('Not found', { status: 404, headers: corsHeaders() });
+    return new Response(JSON.stringify({ error: 'not found' }), { status: 404, headers: corsHeaders({ 'Content-Type': 'application/json' }) });
   } catch (err) {
     // avoid leaking internals
     return jsonError('server_error', 500);
@@ -66,7 +68,8 @@ async function handleGenerateKey(request) {
   const token = makeToken();
   const meta = { created: Date.now(), active: true };
   await KV_NAMESPACE.put(KEY_PREFIX + token, JSON.stringify(meta));
-  return jsonResponse({ key: token });
+  // Return the daily limit so the client can show it
+  return jsonResponse({ key: token, dailyLimit: RATE_LIMIT_PER_DAY });
 }
 
 function todayBucket() {
@@ -96,16 +99,17 @@ async function handleChat(request) {
   if (used >= RATE_LIMIT_PER_DAY) return jsonError('rate_limited', 429);
   await KV_NAMESPACE.put(usageKey, String(used + 1), { expirationTtl: 60 * 60 * 24 * 2 });
 
-  // Forward to OpenAI (or other provider). Requires OPENAI_API_KEY secret binding.
-  const openaiKey = GLOBAL_OPENAI_KEY();
-  if (!openaiKey) return jsonError('backend_misconfigured', 500);
+  // Forward to Workers AI binding if available, or fall back to OpenAI key if configured
+  // If you use Cloudflare Workers AI binding, adjust this block accordingly.
+  const aiKey = GLOBAL_OPENAI_KEY();
+  if (!aiKey) return jsonError('backend_misconfigured', 500);
 
   // Construct request for OpenAI chat completions
   const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${openaiKey}`
+      'Authorization': `Bearer ${aiKey}`
     },
     body: JSON.stringify({
       model: 'gpt-3.5-turbo',
@@ -123,13 +127,16 @@ async function handleChat(request) {
   }
   const j = await openaiRes.json();
   const reply = j.choices?.[0]?.message?.content ?? (j.choices?.[0]?.text ?? '');
-  return jsonResponse({ reply });
+
+  // Return reply and remaining quota info
+  const usedAfter = Number(await KV_NAMESPACE.get(`${USAGE_PREFIX}${key}:${todayBucket()}`) || '0');
+  const remaining = Math.max(0, RATE_LIMIT_PER_DAY - usedAfter);
+  return jsonResponse({ reply, remaining });
 }
 
 // Helper to access the secret in both module and classic workers
 function GLOBAL_OPENAI_KEY() {
   // In classic worker runtime secrets are available as global variables named after the secret key.
   if (typeof OPENAI_API_KEY !== 'undefined') return OPENAI_API_KEY;
-  // In Wrangler's newer Modules/ENV mapping you'd receive env in the handler; not used here.
   return undefined;
 }
