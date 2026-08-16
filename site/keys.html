@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>API Keys — Sammy Bot</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="banner">🕷️ ADMIN ABUSE EVENT: SAMMY BOT IS LIVE :3</div>
+
+<div class="wrap">
+  <nav>
+    <a href="index.html" class="brand"><span class="dot">●</span>Sammy Bot</a>
+    <div class="links">
+      <a href="index.html">Chat</a>
+      <a href="keys.html" class="active">API Keys</a>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <h1>Get your <span>API key</span></h1>
+    <p class="sub">Free, no login. One key, 100 requests a day. Drop it in your Lua script and let players ask Sammy Bot questions in-game.</p>
+  </section>
+
+  <div class="web-line"></div>
+
+  <div class="card">
+    <span class="badge">STEP 1</span>
+    <h2>Generate a key</h2>
+    <p>Tap the button — your key is generated instantly and saved in your browser.</p>
+    <button class="primary" id="genBtn">Generate API Key</button>
+    <div class="key-box" id="keyBox" style="display:none"></div>
+    <p id="usageLine" style="display:none; font-size: 13px;"></p>
+  </div>
+
+  <div class="card">
+    <span class="badge">STEP 2</span>
+    <h2>Drop it into your Roblox script</h2>
+    <p>Paste your key into the snippet below, put it in a <code>LocalScript</code>, and call <code>askSammy("your question")</code>.</p>
+    <div class="code-block" id="luaBlock">-- Sammy Bot client — ask questions about SpyderSammy from in-game
+local HttpService = game:GetService("HttpService")
+
+local API_URL = "WORKER_URL_HERE/chat"
+local API_KEY = "YOUR_KEY_HERE"
+
+local function askSammy(question)
+    local body = HttpService:JSONEncode({
+        key = API_KEY,
+        message = question
+    })
+
+    local ok, result = pcall(function()
+        return HttpService:PostAsync(API_URL, body, Enum.HttpContentType.ApplicationJson)
+    end)
+
+    if not ok then
+        warn("Sammy Bot request failed: " .. tostring(result))
+        return nil
+    end
+
+    local decoded = HttpService:JSONDecode(result)
+    if decoded.error then
+        warn("Sammy Bot error: " .. decoded.error)
+        return nil
+    end
+
+    return decoded.reply
+end
+
+-- Example usage:
+local reply = askSammy("When did Steal a Brainrot come out?")
+print(reply)</div>
+  </div>
+
+  <div class="card">
+    <span class="badge">NOTE</span>
+    <h2>Rate limits</h2>
+    <p>Each key gets 100 free messages per day (resets daily). This keeps the free AI
+    tier available for everyone — if you need more, run your own Worker deployment
+    (see the project README) and raise the limit yourself.</p>
+  </div>
+</div>
+
+<footer>Fan project · not affiliated with SpyderSammy, Do Big Studios, or Roblox Corporation.</footer>
+
+<script>
+  const WORKER_URL = "https://spydersammy-ai.ezcaresandiego.workers.dev";
+
+  const genBtn = document.getElementById('genBtn');
+  const keyBox = document.getElementById('keyBox');
+  const usageLine = document.getElementById('usageLine');
+  const luaBlock = document.getElementById('luaBlock');
+
+  let existing = localStorage.getItem('sammybot_key');
+  if (existing) showKey(existing);
+
+  function showKey(key) {
+    keyBox.style.display = 'block';
+    keyBox.textContent = key;
+    usageLine.style.display = 'block';
+    usageLine.textContent = 'Saved in this browser. 100 requests/day.';
+    luaBlock.textContent = luaBlock.textContent
+      .replace(/local API_URL = ".*"/, `local API_URL = "${WORKER_URL}/chat"`)
+      .replace(/local API_KEY = ".*"/, `local API_KEY = "${key}"`);
+  }
+
+  genBtn.addEventListener('click', async () => {
+    genBtn.disabled = true;
+    genBtn.textContent = 'Generating...';
+    try {
+      const res = await fetch(WORKER_URL + '/generate-key', { method: 'POST' });
+      const data = await res.json();
+      localStorage.setItem('sammybot_key', data.key);
+      showKey(data.key);
+    } catch (err) {
+      keyBox.style.display = 'block';
+      keyBox.textContent = 'Could not reach the backend — check WORKER_URL is deployed.';
+    } finally {
+      genBtn.disabled = false;
+      genBtn.textContent = 'Generate API Key';
+    }
+  });
+</script>
+
+</body>
+</html>
