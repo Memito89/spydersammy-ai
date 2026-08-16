@@ -48,7 +48,6 @@
 <footer>Fan project · not affiliated with SpyderSammy, Do Big Studios, or Roblox Corporation.</footer>
 
 <script>
-  // ⚠️ Point this at your deployed Worker URL after you deploy it (see README).
   const WORKER_URL = "https://spydersammy-ai.ezcaresandiego.workers.dev";
 
   const log = document.getElementById('log');
@@ -82,13 +81,27 @@
     send.disabled = true;
 
     try {
-      const key = await ensureKey();
-      const res = await fetch(WORKER_URL + '/chat', {
+      let key = await ensureKey();
+      let res = await fetch(WORKER_URL + '/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key, message: text })
       });
-      const data = await res.json();
+      let data = await res.json();
+
+      // If key is invalid/stale, regenerate once and retry
+      if (res.status === 401) {
+        localStorage.removeItem('sammybot_key');
+        apiKey = null;
+        key = await ensureKey();
+        res = await fetch(WORKER_URL + '/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key, message: text })
+        });
+        data = await res.json();
+      }
+
       if (data.error) {
         addMsg('Error: ' + data.error, 'system');
       } else {
