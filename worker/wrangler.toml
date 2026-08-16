@@ -1,0 +1,12 @@
+name = "spydersammy-ai-worker"
+type = "javascript"
+workers_dev = true
+
+# Replace the placeholder account_id with your Cloudflare account id if you want to publish to a custom domain or use environments
+# account_id = "your_account_id_here"
+
+[[kv_namespaces]]
+binding = "KV_NAMESPACE"
+# id = "your_kv_namespace_id"
+
+# If you want to set route for a custom domain, add a `route` line or use `wrangler publish --env production` with env settings.
