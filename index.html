@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sammy Bot — Ask about SpyderSammy</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="banner">🕷️ ADMIN ABUSE EVENT: SAMMY BOT IS LIVE :3</div>
+
+<div class="wrap">
+  <nav>
+    <a href="index.html" class="brand"><span class="dot">●</span>Sammy Bot</a>
+    <div class="links">
+      <a href="index.html" class="active">Chat</a>
+      <a href="keys.html">API Keys</a>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <h1>Everything about<br><span>SpyderSammy</span>, on tap.</h1>
+    <p class="sub">A fan-made Q&A bot that knows the lore, the history, and the chaos
+    behind Steal a Brainrot's creator — Sam "SpyderSammy" Brakta. Ask it anything.</p>
+  </section>
+
+  <div class="web-line"></div>
+
+  <div class="chat-card">
+    <div class="chat-head"><span class="pulse"></span> sammy-bot // live</div>
+    <div class="chat-log" id="log">
+      <div class="msg system">Ask something like "when did Steal a Brainrot come out?" or "what's the deal with Jandel?"</div>
+    </div>
+    <div class="chat-input">
+      <input id="input" type="text" placeholder="Ask about SpyderSammy..." maxlength="500">
+      <button class="primary" id="send">Send</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>How this works</h2>
+    <p>This chat runs through a free API key. The same key works in your Roblox Lua
+    scripts — see the <a href="keys.html" style="color: var(--amber)">API Keys</a> page
+    to grab one and get the drop-in snippet.</p>
+  </div>
+</div>
+
+<footer>Fan project · not affiliated with SpyderSammy, Do Big Studios, or Roblox Corporation.</footer>
+
+<script>
+  // ⚠️ Point this at your deployed Worker URL after you deploy it (see README).
+  const WORKER_URL = "https://spydersammy-ai.ezcaresandiego.workers.dev";
+
+  const log = document.getElementById('log');
+  const input = document.getElementById('input');
+  const send = document.getElementById('send');
+
+  let apiKey = localStorage.getItem('sammybot_key');
+
+  function addMsg(text, cls) {
+    const div = document.createElement('div');
+    div.className = 'msg ' + cls;
+    div.textContent = text;
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  async function ensureKey() {
+    if (apiKey) return apiKey;
+    const res = await fetch(WORKER_URL + '/generate-key', { method: 'POST' });
+    const data = await res.json();
+    apiKey = data.key;
+    localStorage.setItem('sammybot_key', apiKey);
+    return apiKey;
+  }
+
+  async function sendMessage() {
+    const text = input.value.trim();
+    if (!text) return;
+    addMsg(text, 'user');
+    input.value = '';
+    send.disabled = true;
+
+    try {
+      const key = await ensureKey();
+      const res = await fetch(WORKER_URL + '/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, message: text })
+      });
+      const data = await res.json();
+      if (data.error) {
+        addMsg('Error: ' + data.error, 'system');
+      } else {
+        addMsg(data.reply, 'bot');
+      }
+    } catch (err) {
+      addMsg('Could not reach Sammy Bot — check the WORKER_URL is deployed.', 'system');
+    } finally {
+      send.disabled = false;
+      input.focus();
+    }
+  }
+
+  send.addEventListener('click', sendMessage);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(); });
+</script>
+
+</body>
+</html>
